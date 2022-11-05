@@ -2,11 +2,14 @@ from dataclasses import dataclass
 import json
 from math import prod
 from urllib.robotparser import RequestRate
-from django.shortcuts import render
+from django.shortcuts import render,redirect
 from django.http import JsonResponse
 import datetime
 from .models import *
+from django.contrib import messages
+from django.contrib.auth import login, logout, authenticate
 from .utils import cartData, cookieCart, guestOrder
+from .forms import CreateUserForm
 
 def store(request):
 	data = cartData(request)
@@ -82,3 +85,35 @@ def processOrder(request):
 			)
 
 	return JsonResponse('Payment completed', safe=False)
+
+def login_request(request):
+	if request.method == 'POST':
+		username = request.POST.get('username')
+		password = request.POST.get('password')
+		user = authenticate(username=username, password=password)
+		if user is not None:
+			login(request, user)
+			return redirect('store')
+		else: 
+			messages.info(request, 'Username or password is incorrect. ')
+	context = {}
+	return render(request, 'store/login.html')
+
+def logout_request(request):
+    logout(request)
+    return redirect('store')
+
+def register(request):
+	form = CreateUserForm()
+	if request.method == 'POST':
+		form = CreateUserForm(request.POST)
+		if form.is_valid():
+			user = form.save()
+			username = form.cleaned_data.get('username')
+			email = form.cleaned_data.get('email')
+			messages.success(request, 'Account was created for ' + username)
+			customer = Customer.objects.create(user=user, name=username, email=email)
+			customer.save()
+			return redirect('login_request')
+	context = {'form': form}
+	return render(request, 'store/register.html',context)
